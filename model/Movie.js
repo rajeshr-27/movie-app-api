@@ -8,6 +8,7 @@ const MovieSchema = mongoose.Schema({
     },
     category:{
         type:String,
+        index:true,
         ref:'category'
     },
     imdb:{

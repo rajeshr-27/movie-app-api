@@ -126,20 +126,24 @@
 const asyncHandler = require('express-async-handler');
 const multer = require('multer');
 const MovieModel = require('../model/Movie');
-const storage = multer.diskStorage({
-    destination:(req,file,cb)=>{
-        cb(null,'uploads/')
-    },
-    filename:(req,file,cb)=>{
-        cb(null,file.originalname);
-    }
-})
-
+const fs = require('fs');
+const sharp = require('sharp');
+const path = require('path');
+// const storage = multer.diskStorage({
+//     destination:(req,file,cb)=>{
+//         cb(null,'uploads/')
+//     },
+//     filename:(req,file,cb)=>{
+//         cb(null,file.originalname);
+//     }
+// })
+const storage = multer.memoryStorage();
 const upload = multer({storage});
 //@desc Get Movies
 //Method GET /api/movie/list
 //Access public
 const getMovies = asyncHandler( async(req,res) => {
+    console.log(__basedir);
     const search = req.query.q || "";
     
     let where = {}
@@ -153,8 +157,13 @@ const getMovies = asyncHandler( async(req,res) => {
     if(category){ 
         where.category = category
     }
-    console.log(where);
-    const movies = await MovieModel.find(where).populate('category','name');
+    const limit = parseInt(req.query.limit) || 5;
+    const page = parseInt(req.query.page) - 1 || 0;
+    const movies = await MovieModel.find(where,'_id movie_name image release_date')
+    .populate('category','name')
+    .limit(limit)
+    .skip(page * limit)
+    .sort({release_date:-1});
     const json_data = {
         status:1,
         message:"success",
@@ -187,19 +196,24 @@ const getMovie = asyncHandler( async(req,res) => {
 //Access public
 
 const addMovie = asyncHandler( async(req,res)=>{
-    const postData = JSON.parse(req.body.data);
+    //const postData = JSON.parse(req.body.data);
+    const postData =  req.body;
     const {movie_name, category, movie_link } = postData;
     if(!movie_name || !category || !movie_link ){
         res.status(400);
         throw new Error('Enter the mandatory fields');
     }
     if(req.file){
-        postData.image = req.file.filename
+        postData.image = req.file.originalname
+        // console.log(req.file);
+        const resizedImageBuffer = await sharp(req.file.buffer).resize(300, 300).toBuffer();
+        const outputFilePath = path.join(__basedir,'uploads', req.file.originalname);
+        fs.writeFileSync(outputFilePath, resizedImageBuffer);
     }else {
         postData.image = '';
     }
     //Add the movie
-    await MovieModel.create(postData);
+    // await MovieModel.create(postData);
     const json_data = {
         status:1,
         message:"Movie added successfully",
@@ -225,7 +239,11 @@ const updateMovie = asyncHandler( async(req,res) => {
         throw new Error('Movie not found');
     }
     if(req.file){
-        postData.image = req.file.filename;
+        postData.image = req.file.originalname
+        // console.log(req.file);
+        const resizedImageBuffer = await sharp(req.file.buffer).resize(300, 300).toBuffer();
+        const outputFilePath = path.join(__basedir,'uploads', req.file.originalname);
+        fs.writeFileSync(outputFilePath, resizedImageBuffer);
     }else {
         postData.image = movieInfo.image;
     }
